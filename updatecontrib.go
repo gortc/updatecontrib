@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -43,6 +44,12 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	dir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	repos = append(repos, filepath.Base(dir))
 
 	all := gitAuthorEmails() // call first (it will reset CONTRIBUTORS)
 	c := file("CONTRIBUTORS")
@@ -76,6 +83,7 @@ func main() {
 				continue
 			}
 		}
+		who.name = strings.TrimSpace(who.name)
 		if !c.Contains(who) {
 			c.addLine(who)
 			fmt.Fprintf(&actions, "Added %s <%s>\n", who.name, who.firstEmail())
@@ -90,8 +98,7 @@ func main() {
 		sort.Strings(lines)
 		os.Stdout.WriteString(strings.Join(lines, ""))
 	}
-	err := sortACFile("CONTRIBUTORS")
-	if err != nil {
+	if err = sortACFile("CONTRIBUTORS"); err != nil {
 		log.Fatalf("Error sorting CONTRIBUTORS file: %v", err)
 	}
 	if errors.Len() > 0 {
@@ -254,17 +261,12 @@ func file(name string) *acFile {
 // updated, and used to find contributors to add to the CONTRIBUTORS file.
 // It includes "go", which represents the main Go repository,
 // and an import path corresponding to each subrepository root.
-var repos = []string{
-	"go", // main repo
-}
+var repos = []string{}
 
 // githubOrgRepo takes an import path (from the forms in the repos global variable)
 // and returns the GitHub org and repo.
 func githubOrgRepo(repo string) (githubOrg, githubRepo string) {
-	if repo == "go" {
-		return "golang", "go"
-	}
-	return "golang", strings.TrimSuffix(path.Base(repo), ".git")
+	return "gortc", repo
 }
 
 func gitAuthorEmails() []*acLine {
@@ -275,14 +277,13 @@ func gitAuthorEmails() []*acLine {
 		dir := ""
 		cmd := exec.Command("git", "fetch")
 		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Fatalf("Error updating repo %q: %v, %s", repo, err, out)
-		}
-		if repo == "go" {
-			// Initialize CONTRIBUTORS file to latest copy from origin/master.
-			exec.Command("git", "checkout", "origin/master", "--", "CONTRIBUTORS").Run()
-			exec.Command("git", "reset").Run()
-		}
+		//if out, err := cmd.CombinedOutput(); err != nil {
+		//	log.Fatalf("Error updating repo %q: %v, %s", repo, err, out)
+		//}
+
+		// Initialize CONTRIBUTORS file to latest copy from origin/master.
+		//exec.Command("git", "checkout", "origin/master", "--", "CONTRIBUTORS").Run()
+		//exec.Command("git", "reset").Run()
 
 		cmd = exec.Command("git", "log", "--format=%ae/%h/%an", "origin/master") //, "HEAD@{5 years ago}..HEAD")
 		cmd.Dir = dir
@@ -448,6 +449,7 @@ var skipEmail = map[string]bool{
 	"bwk@research.att.com": true,
 	"research!bwk":         true,
 	"bwk":                  true,
+	"badges@fossa.io":      true,
 }
 
 // TODO(dmitshur): Use golang.org/x/build/internal/gophers package to perform some of
